@@ -26,10 +26,10 @@ with tf.Session() as sees:
     #                                                       TEST PARAMETERS
     ############################################################################################################################
     batch_size =           2
-    input_cube_size =      5
+    input_cube_size =      3
     input_channel_size =   3 
     kernel_size =          3
-    output_cube_size =     3
+    output_cube_size =     5
     stride =               1      
 
     input_group_size =     24       
@@ -44,7 +44,7 @@ with tf.Session() as sees:
     perm_mat_rot = layer.group.get_permutation_matrix(cayley, 1)    # cayley table index to permute for  90 degree rotation
     perm_mat_unrot = layer.group.get_permutation_matrix(cayley, 3)  # cayley table index to permute for -90 degree rotation
     print_tensors = True
-    print_tensors_channel = 1
+    print_tensors_channel = 0
 
     ############################################################################################################################
     #                                                   PERFORM CONVOLUTION TEST 
@@ -53,7 +53,7 @@ with tf.Session() as sees:
     x = tf.constant(x, dtype=tf.float32)
 
     # Shape test
-    result = layer.Gconv(x, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
+    result = layer.GconvTransposed(x, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
     expected_shape = [batch_size, output_cube_size, output_cube_size, output_cube_size, output_channel_size, output_group_size]
     assert result.shape == expected_shape, f"Gconv output shape {result.shape} does not match expected {expected_shape}"
     print("test_dim_Gconv passed")
@@ -66,7 +66,7 @@ with tf.Session() as sees:
     w = tf.reshape(x_rotated, [-1, output_group_size])
     w = w @ perm_mat_rot
     x_rotated = tf.reshape(w, x_shape)
-    result_rotated = layer.Gconv(x_rotated, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
+    result_rotated = layer.GconvTransposed(x_rotated, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
 
     # Permute the output to perform the check
     result_rotated_sh = result_rotated.get_shape().as_list()
@@ -85,7 +85,7 @@ with tf.Session() as sees:
         print_input_corners(sees.run(x), input_cube_size, print_tensors_channel)
         print("\n")
 
-        print("INPUT ROTATED")
+        print("INPUT ROTATED AND PERMUTED")
         print_input_corners(sees.run(x_rotated), input_cube_size, print_tensors_channel)
         print("\n")
 
