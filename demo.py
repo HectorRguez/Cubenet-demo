@@ -32,17 +32,18 @@ with tf.Session() as sees:
     output_cube_size =     3
     stride =               1      
 
-    input_group_size =     1        # TODO: Have not checked this yet
+    input_group_size =     24       
     output_channel_size =  4        
     output_group_size =    24       
             
-    tolerance = 1e-4
+    tolerance = 1e-3
     group = "S4"
     layer = Layers(group)
     cayley = layer.group.get_cayleytable()
     rotation = np.pi/2 
-    perm_mat = layer.group.get_permutation_matrix(cayley, 3) # cayley table index
-    print_tensors = False
+    perm_mat_rot = layer.group.get_permutation_matrix(cayley, 1)    # cayley table index to permute for  90 degree rotation
+    perm_mat_unrot = layer.group.get_permutation_matrix(cayley, 3)  # cayley table index to permute for -90 degree rotation
+    print_tensors = True
     print_tensors_channel = 1
 
     ############################################################################################################################
@@ -57,17 +58,20 @@ with tf.Session() as sees:
     assert result.shape == expected_shape, f"Gconv output shape {result.shape} does not match expected {expected_shape}"
     print("test_dim_Gconv passed")
 
-    # Rotate input to obtain a rotated output
+    # Rotate and permute input to obtain a rotated output
     x_shape = x.get_shape().as_list()
     x_rotated = tf.reshape(x, [batch_size, input_cube_size, input_cube_size, -1])
     x_rotated = tf.contrib.image.rotate(x_rotated, rotation)
     x_rotated = tf.reshape(x_rotated, x_shape)
+    w = tf.reshape(x_rotated, [-1, output_group_size])
+    w = w @ perm_mat_rot
+    x_rotated = tf.reshape(w, x_shape)
     result_rotated = layer.Gconv(x_rotated, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
 
     # Permute the output to perform the check
     result_rotated_sh = result_rotated.get_shape().as_list()
     w = tf.reshape(result_rotated, [-1, output_group_size])
-    w = w @ perm_mat
+    w = w @ perm_mat_unrot
     result_rotated_permuted = tf.reshape(w, result_rotated_sh)
 
     # Rotate the permuted output to perform the check
@@ -78,7 +82,7 @@ with tf.Session() as sees:
     # Tensor value printing
     if(print_tensors): 
         print("INPUT")
-        print_input_corners(x, input_cube_size, print_tensors_channel)
+        print_input_corners(sees.run(x), input_cube_size, print_tensors_channel)
         print("\n")
 
         print("INPUT ROTATED")
