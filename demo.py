@@ -9,38 +9,41 @@ import tensorflow as tf
 
 from layers import Layers
 
-def print_group_equivariant(result, n):
-    corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
-    for i in range(4):
-        for j in range(4):
-            print(f"BATCH = 0, H = {corners[j][0]}, W = {corners[j][1]}, D = 0, CHANNEL = 0, GROUP = {i}: {sees.run(result[0,corners[j][0],corners[j][1],0,0,i])}")
-
-def print_input_corners(input, n):
-    corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
-    for i in range(4):
-        print(f"BATCH = 0, H = {corners[i][0]}, W = {corners[i][1]}, D = 0, CHANNEL = 0, GROUP = 0: {sees.run(input[0,corners[i][0],corners[i][1],0,0,0])}")
 
 with tf.Session() as sees:
+    def print_group_equivariant(result, n, channel):
+        corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
+        for i in range(4):
+            for j in range(4):
+                print(f"BATCH = 0, H = {corners[j][0]}, W = {corners[j][1]}, D = 0, CHANNEL = {channel}, GROUP = {i}: {(result[0,corners[j][0],corners[j][1],0,channel,i])}")
+
+    def print_input_corners(input, n, channel):
+        corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
+        for i in range(4):
+            print(f"BATCH = 0, H = {corners[i][0]}, W = {corners[i][1]}, D = 0, CHANNEL = {channel}, GROUP = 0: {(input[0,corners[i][0],corners[i][1],0,channel,0])}")
+
     ############################################################################################################################
     #                                                       TEST PARAMETERS
     ############################################################################################################################
-    batch_size = 2
-    input_cube_size = 5
-    kernel_size = 3
-    output_size = 2
-    input_channel_size = 3 
-    input_group_size = 1        # TODO: Have not checked this yet
-    output_channel_size = 1     # TODO: Have not checked this yet
-    output_group_size = 4
-    stride = 1                  
-    
-    tolerance = 1e-5
+    batch_size =           2
+    input_cube_size =      5
+    input_channel_size =   3 
+    kernel_size =          3
+    output_cube_size =     3
+    stride =               1      
+
+    input_group_size =     1        # TODO: Have not checked this yet
+    output_channel_size =  4        
+    output_group_size =    4        # TODO: Have not checked this yet
+            
+    tolerance = 1e-4
     group = "V"
     layer = Layers(group)
     cayley = layer.group.get_cayleytable()
     rotation = np.pi 
     perm_mat = layer.group.get_permutation_matrix(cayley, 1) # cayley table index
     print_tensors = False
+    print_tensors_channel = 1
 
     ############################################################################################################################
     #                                                   PERFORM CONVOLUTION TEST 
@@ -50,7 +53,7 @@ with tf.Session() as sees:
 
     # Shape test
     result = layer.Gconv(x, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
-    expected_shape = [batch_size, output_size, output_size, output_size, output_channel_size, output_group_size]
+    expected_shape = [batch_size, output_cube_size, output_cube_size, output_cube_size, output_channel_size, output_group_size]
     assert result.shape == expected_shape, f"Gconv output shape {result.shape} does not match expected {expected_shape}"
     print("test_dim_Gconv passed")
 
@@ -68,42 +71,41 @@ with tf.Session() as sees:
     result_rotated_permuted = tf.reshape(w, result_rotated_sh)
 
     # Rotate the permuted output to perform the check
-    result_rotated_permuted_rotated_back = tf.reshape(result_rotated_permuted, [batch_size, output_size, output_size, -1])
+    result_rotated_permuted_rotated_back = tf.reshape(result_rotated_permuted, [batch_size, output_cube_size, output_cube_size, -1])
     result_rotated_permuted_rotated_back = tf.contrib.image.rotate(result_rotated_permuted_rotated_back, -rotation)
     result_rotated_permuted_rotated_back = tf.reshape(result_rotated_permuted_rotated_back, result_rotated_sh)
+
+    # Tensor value printing
+    if(print_tensors): 
+        print("INPUT")
+        print_input_corners(x, input_cube_size, print_tensors_channel)
+        print("\n")
+
+        print("INPUT ROTATED")
+        print_input_corners(sees.run(x_rotated), input_cube_size, print_tensors_channel)
+        print("\n")
+
+        print("RESULT")
+        print_group_equivariant(sees.run(result), output_cube_size, print_tensors_channel)
+        print("\n")
+
+        # print("RESULT ROTATED")
+        # print_group_equivariant(sees.run(result_rotated), output_cube_size, print_tensors_channel)
+        # print("\n")
+        # 
+        # print("RESULT ROTATED PERMUTED")
+        # print_group_equivariant(sees.run(result_rotated_permuted), output_cube_size, print_tensors_channel)
+        # print("\n")
+
+        print("RESULT ROTATED PERMUTED ROTATED")
+        print_group_equivariant(sees.run(result_rotated_permuted_rotated_back), output_cube_size, print_tensors_channel)
+        print("\n")
 
     # Compare the two outputs with a specific tolerance
     difference = tf.abs(result_rotated_permuted_rotated_back - result)
     within_tolerance = tf.reduce_all(tf.less_equal(difference, tolerance))
 
-    with tf.Session() as sess:
-        # Evaluate the boolean result of all_equal
-        all_equal_result = sess.run(within_tolerance)
-        assert all_equal_result, f"Gconv output for rotated input does not match output for original input"
-        print("test_equivariance_Gconv passed")
-
-        # Tensor value printing
-        if(print_tensors): 
-            print("INPUT")
-            print_input_corners(x, input_cube_size)
-            print("\n")
-
-            print("INPUT ROTATED")
-            print_input_corners(x_rotated, input_cube_size)
-            print("\n")
-
-            print("RESULT")
-            print_group_equivariant(result, output_size)
-            print("\n")
-
-            print("RESULT ROTATED")
-            print_group_equivariant(result_rotated, output_size)
-            print("\n")
-
-            print("RESULT ROTATED PERMUTED")
-            print_group_equivariant(result_rotated_permuted, output_size)
-            print("\n")
-
-            print("RESULT ROTATED PERMUTED ROTATED")
-            print_group_equivariant(result_rotated_permuted_rotated_back, output_size)
-            print("\n")
+    # Evaluate the boolean result of all_equal
+    all_equal_result = sees.run(within_tolerance)
+    assert all_equal_result, f"Gconv output for rotated input does not match output for original input"
+    print("test_equivariance_Gconv passed")
