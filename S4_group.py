@@ -80,6 +80,14 @@ class S4_group(object):
 
 
     def get_cayleytable(self):
+        """
+                          idx
+            z-axis  0°  -> 0
+            z-axis  90° -> 3
+            z-axis 180° -> 2
+            z-axis -90° -> 1
+        """
+
         Z = self.get_s4mat()
         cayley = []
         for y in Z:
