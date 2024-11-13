@@ -11,9 +11,9 @@ from layers import Layers
 
 
 with tf.Session() as sees:
-    def print_group_equivariant(result, n, channel):
+    def print_group_equivariant(result, n, channel, output_group_size):
         corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
-        for i in range(4):
+        for i in range(output_group_size):
             for j in range(4):
                 print(f"BATCH = 0, H = {corners[j][0]}, W = {corners[j][1]}, D = 0, CHANNEL = {channel}, GROUP = {i}: {(result[0,corners[j][0],corners[j][1],0,channel,i])}")
 
@@ -34,14 +34,14 @@ with tf.Session() as sees:
 
     input_group_size =     1        # TODO: Have not checked this yet
     output_channel_size =  4        
-    output_group_size =    4        # TODO: Have not checked this yet
+    output_group_size =    24       
             
     tolerance = 1e-4
-    group = "V"
+    group = "S4"
     layer = Layers(group)
     cayley = layer.group.get_cayleytable()
-    rotation = np.pi 
-    perm_mat = layer.group.get_permutation_matrix(cayley, 1) # cayley table index
+    rotation = np.pi/2 
+    perm_mat = layer.group.get_permutation_matrix(cayley, 3) # cayley table index
     print_tensors = False
     print_tensors_channel = 1
 
@@ -86,19 +86,19 @@ with tf.Session() as sees:
         print("\n")
 
         print("RESULT")
-        print_group_equivariant(sees.run(result), output_cube_size, print_tensors_channel)
+        print_group_equivariant(sees.run(result), output_cube_size, print_tensors_channel, output_group_size)
         print("\n")
 
         # print("RESULT ROTATED")
-        # print_group_equivariant(sees.run(result_rotated), output_cube_size, print_tensors_channel)
+        # print_group_equivariant(sees.run(result_rotated), output_cube_size, print_tensors_channel, output_group_size)
         # print("\n")
         # 
         # print("RESULT ROTATED PERMUTED")
-        # print_group_equivariant(sees.run(result_rotated_permuted), output_cube_size, print_tensors_channel)
+        # print_group_equivariant(sees.run(result_rotated_permuted), output_cube_size, print_tensors_channel, output_group_size)
         # print("\n")
 
         print("RESULT ROTATED PERMUTED ROTATED")
-        print_group_equivariant(sees.run(result_rotated_permuted_rotated_back), output_cube_size, print_tensors_channel)
+        print_group_equivariant(sees.run(result_rotated_permuted_rotated_back), output_cube_size, print_tensors_channel, output_group_size)
         print("\n")
 
     # Compare the two outputs with a specific tolerance
