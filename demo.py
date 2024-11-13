@@ -27,12 +27,12 @@ with tf.Session() as sees:
     batch_size = 2
     input_cube_size = 5
     kernel_size = 3
-    output_size = 3
-    input_channel_size = 3
-    input_group_size = 1
-    output_channel_size = 1 # Have not checked this yet
+    output_size = 2
+    input_channel_size = 3 
+    input_group_size = 1        # TODO: Have not checked this yet
+    output_channel_size = 1     # TODO: Have not checked this yet
     output_group_size = 4
-    stride = 1 # Have not checked this yet
+    stride = 1                  
     
     tolerance = 1e-5
     group = "V"
