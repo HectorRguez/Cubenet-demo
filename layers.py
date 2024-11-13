@@ -29,11 +29,14 @@ class Layers(object):
 
         # Constants
         self.cayley = self.group.cayleytable
-
-
-    def get_kernel(self, name, shape, factor=2.0, trainable=True):
-        init = tf.contrib.layers.variance_scaling_initializer(factor=factor)
-        return tf.get_variable(name, shape, initializer=init, trainable=trainable)
+        self.kernel_exists = 0
+        
+    def get_kernel(self, name, shape):
+        if(self.kernel_exists == 0): 
+            x = np.random.rand(shape[0], shape[1], shape[2], shape[3])
+            self.kernel = tf.constant(x, dtype=tf.float32)
+            self.kernel_exists = 1
+        return self.kernel
 
 
     def conv(self, x, kernel_size, n_out, strides=1, padding="SAME"):
