@@ -95,7 +95,7 @@ class Layers(object):
             # one dimension in the channels.
             W = self.get_kernel("W", [kernel_size, kernel_size, kernel_size, xsh[4]*xsh[5]*n_out])
             WN = self.group.get_Grotations(W)
-            WN = tf.stack(WN, -1)
+            WN = tf.stack(WN, -1) # https://github.com/tensorflow/docs/blob/r1.8/site/en/api_docs/python/tf/stack.md
             # Reshape and rotate the io filters 4 times. Each input-output pair is
             # rotated and stacked into a much bigger kernel
             xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]])
@@ -112,10 +112,13 @@ class Layers(object):
                 # [kernel_size, kernel_size, kernel_size, n_in, 4, n_out, 4]
                 # Shift over axis 4
                 WN_shifted = self.group.G_permutation(WN)
-                WN = tf.stack(WN_shifted, -1)
+                # WN_shifted is a list of length 4, where each element is a copy of filter of shape [kernel_size, kernel_size, kernel_size, n_in, 4, n_out]
+                WN = tf.stack(WN_shifted, -1) # stack the copies along the last dimension
                 # Shift over axis 6
                 # Stack the shifted tensors and reshape to 4D kernel
                 WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4]*self.group_dim, n_out*self.group_dim])
+                # collapse the group-dimension into input-channel, and the copy-dimension into output-channel
+                # so you can use the original conv3d as usual
 
             # Convolve
             # Gaussian dropout on the weights

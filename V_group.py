@@ -28,6 +28,19 @@ class V_group(object):
             x: [h,w,d,n_channels]
         Returns:
             list of 4 rotations of x [[h,w,d,n_channels],....]
+
+                 ----------------
+                /              / |
+              dim0            /  |
+              /              /   |
+             /              /    |
+            ------dim2------     |
+            |               |    |
+            |               |   /
+            dim1            |  /
+            |               | /
+            |               |/
+            ----------------
         """
         xsh = x.get_shape().as_list()
         angles = [0.,np.pi]
@@ -36,7 +49,9 @@ class V_group(object):
             # 2x 180. rotations about the z axis
             perm = [1,0,2,3]
             y = tf.transpose(x, perm=perm)
-            y = tf.contrib.image.rotate(y, angles[i])
+            # https://github.com/tensorflow/docs/blob/r1.8/site/en/api_docs/python/tf/contrib/image/rotate.md
+            y = tf.contrib.image.rotate(y, angles[i]) # this function does a counter-clockwise rotation, but after transposing and transposing back, the rotation is clockwise
+            # is a z-axis clockwise rotation
             y = tf.transpose(y, perm=perm)
 
             # 2x 180. rotations about another axis
@@ -50,13 +65,16 @@ class V_group(object):
 
 
     def G_permutation(self, W):
-        """Permute the outputs of the group convolution"""
+        """Permute the outputs of the group convolution
+        W in [kernel_size, kernel_size, kernel_size, n_in, 4, n_out, 4]
+        the last dimension is the 4 rotated copies of filter
+        """
         Wsh = W.get_shape().as_list()
         cayley = self.cayleytable
         U = []
         for i in range(4):
             perm_mat = self.get_permutation_matrix(cayley, i)
-            w = W[:,:,:,:,:,:,i]
+            w = W[:,:,:,:,:,:,i] # select the i-th copy, permute the group-dimension according to i-th column of cayley table
             w = tf.transpose(w, [0,1,2,3,5,4])
             w = tf.reshape(w, [-1, 4])
             w = w @ perm_mat
