@@ -83,9 +83,9 @@ class S4_group(object):
         """
                           idx
             z-axis  0°  -> 0
-            z-axis  90° -> 3
+            z-axis  90° -> 1
             z-axis 180° -> 2
-            z-axis -90° -> 1
+            z-axis -90° -> 3
         """
 
         Z = self.get_s4mat()
