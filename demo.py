@@ -28,7 +28,7 @@ with tf.Session() as sees:
     input_cube_size = 5
     kernel_size = 3
     output_size = 3
-    input_channel_size = 1 # Have not checked this yet
+    input_channel_size = 3
     input_group_size = 1
     output_channel_size = 1 # Have not checked this yet
     output_group_size = 4
@@ -43,7 +43,7 @@ with tf.Session() as sees:
     print_tensors = False
 
     ############################################################################################################################
-    #                                                       PERFORM TEST 
+    #                                                   PERFORM CONVOLUTION TEST 
     ############################################################################################################################
     x = np.random.rand(batch_size, input_cube_size, input_cube_size, input_cube_size, input_channel_size, input_group_size)
     x = tf.constant(x, dtype=tf.float32)
