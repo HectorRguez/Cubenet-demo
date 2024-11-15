@@ -10,6 +10,9 @@ import tensorflow as tf
 from layers import Layers
 
 
+np.random.seed(42)
+tf.set_random_seed(42)
+
 with tf.Session() as sees:
     def print_group_equivariant(result, n, channel, output_group_size):
         corners = [[0,0], [0,n-1], [n-1,0], [n-1,n-1]]
@@ -78,6 +81,8 @@ with tf.Session() as sees:
     result_rotated_permuted_rotated_back = tf.reshape(result_rotated_permuted, [batch_size, output_cube_size, output_cube_size, -1])
     result_rotated_permuted_rotated_back = tf.contrib.image.rotate(result_rotated_permuted_rotated_back, -rotation)
     result_rotated_permuted_rotated_back = tf.reshape(result_rotated_permuted_rotated_back, result_rotated_sh)
+
+    tf.global_variables_initializer().run()
 
     # Tensor value printing
     if(print_tensors): 

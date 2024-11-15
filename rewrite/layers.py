@@ -11,20 +11,24 @@ import tensorflow as tf
 class Layers(object):
     def __init__(self, group):
         if group == "V":
-            from V_group import V_group
+            from groups import V_group
             self.group = V_group()
-            self.group_dim = self.group.group_dim
         elif group == "S4":
-            from S4_group import S4_group
+            from groups import S4_group
             self.group = S4_group()
-            self.group_dim = self.group.group_dim
         elif group == "T4":
-            from T4_group import T4_group
+            from groups import T4_group
             self.group = T4_group()
-            self.group_dim = self.group.group_dim
+        elif group == "Z4":
+            from groups import Z4_group
+            self.group = Z4_group()
+        elif group == "D3":
+            from groups import D3_group
+            self.group = D3_group()
         else:
             print("Group is not recognized")
             sys.exit(-1)
+        self.group_dim = self.group.group_dim
             
 
         # Constants
@@ -39,11 +43,11 @@ class Layers(object):
         return kernel
 
     # def get_kernel(self, name, shape):    
-        # if(self.kernel_exists == 0): 
-            # x = np.random.rand(shape[0], shape[1], shape[2], shape[3])
-            # self.kernel = tf.constant(x, dtype=tf.float32)
-            # self.kernel_exists = 1
-        # return self.kernel
+    #     if(self.kernel_exists == 0): 
+    #         x = np.random.rand(shape[0], shape[1], shape[2], shape[3])
+    #         self.kernel = tf.constant(x, dtype=tf.float32)
+    #         self.kernel_exists = 1
+    #     return self.kernel
 
 
     def conv(self, x, kernel_size, n_out, strides=1, padding="SAME"):
