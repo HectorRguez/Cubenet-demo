@@ -64,10 +64,10 @@ def test_equivariance():
     #                                                       TEST PARAMETERS
     ############################################################################################################################
     batch_size =           2
-    input_cube_size =      5
+    input_cube_size =      3
     input_channel_size =   2 
     kernel_size =          3
-    output_cube_size =     3
+    output_cube_size =     5
     stride =               1            
 
     input_group_size =     24
@@ -84,7 +84,7 @@ def test_equivariance():
     layer = Layers(group)
     group_size = layer.group.group_dim
     # Shape test
-    result = layer.Gconv(x, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
+    result = layer.GconvTransposed(x, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
     expected_shape = [batch_size, output_cube_size, output_cube_size, output_cube_size, output_channel_size, group_size]
     assert result.shape == expected_shape, f"Gconv output shape {result.shape} does not match expected {expected_shape}"
     print("test_dim_Gconv passed")
@@ -102,7 +102,7 @@ def test_equivariance():
             if input_group_size == layer.group.group_dim:
                 x_rotated = layer.group.permute_tensor(x_rotated, test_element)
             assert x_rotated.shape == x.shape, f"rotate_tensor_with_batch shape mismatch"
-            result_rotated = layer.Gconv(x_rotated, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
+            result_rotated = layer.GconvTransposed(x_rotated, kernel_size=kernel_size, n_out=output_channel_size, strides=stride, is_training=False, padding='VALID')
             print(f"Equivariance Test: test_element {test_element}")
             # print("x_rotated")
             # print(sess.run(x_rotated))

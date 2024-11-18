@@ -79,6 +79,25 @@ class Layers(object):
             return tf.transpose(fnc(y), perm=[0,1,2,3,5,4])
 
 
+    def prepare_filters(self, W, kernel_size, n_in, in_group):
+        WN = self.group.get_Grotations(W)
+        # copy and rotate the filter by all group elements.
+        # WN is a list of all rotated copies.
+        if in_group == 1:
+            WN = tf.stack(WN, -1) # stash all rotations (as a list) into the last dimension (as a tensor)
+            WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, n_in, -1]) 
+            # separate n_in and n_out*out_group, as a preparation for conv3d
+        elif in_group == self.group_dim:
+            kernel_shape = [kernel_size, kernel_size, kernel_size, n_in, self.group_dim, -1]
+            # kernel shape is explicitly needed, to divide the channel dimension of each copy into n_in, in_group, n_out
+            # so that we can permute the in_group dimension of rotated copies.
+            WN = self.group.get_Gpermutations(WN, kernel_shape)
+            WN = tf.stack(WN, -1) # stash all copies (as a list) into the last dimension (as a tensor)
+            WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, n_in*self.group_dim, -1])
+            # separate n_in*in_group and n_out*out_group, as a preparation for conv3d
+        return WN
+
+
     def Gconv(self, x, kernel_size, n_out, is_training, strides=1, padding="SAME", drop_sigma=0.1):
         """Perform a discretized convolution on SO(3)
 
@@ -96,21 +115,7 @@ class Layers(object):
             xsh = x.get_shape().as_list()
             xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]]) # stash n_in and in_group_dim
             W = self.get_kernel("W", [kernel_size, kernel_size, kernel_size, xsh[4]*xsh[5]*n_out]) # stash n_in*in_group*n_out
-            WN = self.group.get_Grotations(W)
-            # copy and rotate the filter by all group elements.
-            # WN is a list of all rotated copies.
-            if xsh[-1] == 1:
-                WN = tf.stack(WN, -1) # stash all rotations (as a list) into the last dimension (as a tensor)
-                WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4], -1]) 
-                # separate n_in and n_out*out_group, as a preparation for conv3d
-            elif xsh[-1] == self.group_dim:
-                kernel_shape = [kernel_size, kernel_size, kernel_size, xsh[4], self.group_dim, n_out]
-                # kernel shape is explicitly needed, to divide the channel dimension of each copy into n_in, in_group, n_out
-                # so that we can permute the in_group dimension of rotated copies.
-                WN = self.group.get_Gpermutations(WN, kernel_shape)
-                WN = tf.stack(WN, -1) # stash all copies (as a list) into the last dimension (as a tensor)
-                WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4]*self.group_dim, n_out*self.group_dim])
-                # separate n_in*in_group and n_out*out_group, as a preparation for conv3d
+            WN = self.prepare_filters(W, kernel_size, xsh[4], xsh[5])
 
             # Convolve
             # Gaussian dropout on the weights
@@ -124,6 +129,52 @@ class Layers(object):
                 xN = tf.pad(xN, [[0,0],[pad,pad],[pad,pad],[pad,pad],[0,0]], mode='REFLECT') 
 
             yN = tf.nn.conv3d(xN, WN, strides, padding)
+            ysh = yN.get_shape().as_list()
+            y = tf.reshape(yN, [batch_size, ysh[1], ysh[2], ysh[3], n_out, self.group_dim])
+        return y
+
+
+    def GconvTransposed(self, x, kernel_size, n_out, is_training, strides=1, padding="SAME", drop_sigma=0.1):
+        """Perform a transposed group convolution
+
+        Args:
+            x: [batch_size, N0, N1, N2, n_in, group_dim/1]
+            kernel_size: int for the spatial size of the kernel
+            n_out: int for number of output channels
+            strides: int for spatial stride length
+            padding: "valid" or "same" padding
+        Returns:
+            [batch_size, new_height, new_width, new_depth, n_out, group_dim] tensor in G
+        """
+        batch_size = tf.shape(x)[0]
+        with tf.variable_scope('GconvTransposed'):
+            xsh = x.get_shape().as_list()
+            xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]]) # stash n_in and in_group_dim
+            W = self.get_kernel("W", [kernel_size, kernel_size, kernel_size, xsh[4]*xsh[5]*n_out]) # stash n_in*in_group*n_out
+            WN = self.prepare_filters(W, kernel_size, xsh[4], xsh[5])
+            WN = tf.transpose(WN, [0, 1, 2, 4, 3]) # switch input and output positions
+
+            # Convolve
+            # Gaussian dropout on the weights
+            #WN *= (1 + drop_sigma*tf.to_float(is_training)*tf.random_normal(WN.get_shape()))
+            if not (isinstance(strides, tuple) or isinstance(strides, list)):
+                strides = (1,strides,strides,strides,1)
+            if padding == 'REFLECT':
+                padding = 'VALID'
+                pad = WN.get_shape().as_list()[2] // 2
+                xN = tf.pad(xN, [[0,0],[pad,pad],[pad,pad],[pad,pad],[0,0]], mode='REFLECT') 
+
+            # Compute output shape TODO Improve this section
+            output_shape = [xN.get_shape().as_list()[0]]  # batch size
+            for i in range(1, 4):  # depth, height, width
+                if padding == "SAME":
+                    output_dim = xN.get_shape().as_list()[i] * strides[i]
+                elif padding == "VALID":
+                    output_dim = (xN.get_shape().as_list()[i] - 1) * strides[i] + WN.get_shape().as_list()[i - 1]
+                output_shape.append(int(output_dim))
+            output_shape.append(int(n_out*self.group_dim))  # output channels (actual output channels * dimensions)
+            
+            yN = tf.nn.conv3d_transpose(xN, WN, output_shape, strides, padding)
             ysh = yN.get_shape().as_list()
             y = tf.reshape(yN, [batch_size, ysh[1], ysh[2], ysh[3], n_out, self.group_dim])
         return y
