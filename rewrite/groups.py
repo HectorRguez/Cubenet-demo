@@ -220,7 +220,7 @@ class GroupBase(ABC):
 		return [GroupBase.rotate_tensor(x, g[0], g[1], g[2]) for g in self.group_elements]
 
 	
-	def G_permutation(self, W):
+	def get_Gpermutations(self, W, kernel_shape):
 		"""Permute the outputs of the group convolution
 		Args: 
 			W: [N0,N1,N2,in_channel,group_dim,out_channel,group_dim]
@@ -229,13 +229,10 @@ class GroupBase(ABC):
 		Returns:
 			list of the 4 rotated and permuted (in the group_dim) copies of filter
 		"""
-		U = []
-		for gi in range(self.group_dim):
-			w = W[:,:,:,:,:,:,gi] # the i-th copy of filter, already rotated by the rotation gi.
-			w = tf.gather(w, self.cayleytable[:, self.inverse_map[gi]], axis=-2) 
-			# permute within the group_dim according to Cayley table's gi-th column, which means to perform e = gi * e for each element
-			U.append(w)
-		return U
+		return [
+			tf.gather(tf.reshape(W[gi], kernel_shape), self.cayleytable[:, self.inverse_map[gi]], axis=-2) 
+			for gi in range(self.group_dim)
+		]
 	
 
 	# def get_permutation_matrix(self, gi):

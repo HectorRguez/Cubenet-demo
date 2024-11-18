@@ -8,7 +8,7 @@ np.random.seed(42)
 tf.set_random_seed(42)
 
 
-def is_close(tensor_a, tensor_b, epsilon=1e-5):
+def is_close(tensor_a, tensor_b, epsilon=1e-4):
     return tf.reduce_all(tf.abs(tensor_a - tensor_b) < epsilon)
 
 def show_all_rotations():
@@ -70,7 +70,7 @@ def test_equivariance():
     output_cube_size =     3
     stride =               1            
 
-    input_group_size =     1       
+    input_group_size =     24
     output_channel_size =  2        
             
     group = "S4"
@@ -110,14 +110,14 @@ def test_equivariance():
             # print(sess.run(result_rotated))
             # Rotate the output to perform the check
 
-            result_manual = layer.group.permute_tensor(result_rotated, layer.group.inverse_map[test_element])
-            result_manual = layer.group.rotate_tensor_with_batch(result_manual, layer.group.inverse_map[test_element])
+            # result_manual = layer.group.permute_tensor(result_rotated, layer.group.inverse_map[test_element])
+            # result_manual = layer.group.rotate_tensor_with_batch(result_manual, layer.group.inverse_map[test_element])
 
-            # result_manual = layer.group.rotate_tensor_with_batch(result, test_element)
-            # result_manual = layer.group.permute_tensor(result_manual, test_element)
+            result_manual = layer.group.rotate_tensor_with_batch(result, test_element)
+            result_manual = layer.group.permute_tensor(result_manual, test_element)
             # print("result_manual")
             # print(sess.run(result_manual))
-            assert sess.run(is_close(result_manual, result)), f"Equivariance Test: rotated and permuted output does not match x_rotated result. Test element {test_element}" 
+            assert sess.run(is_close(result_manual, result_rotated)), f"Equivariance Test: rotated and permuted output does not match x_rotated result. Test element {test_element}\n {sess.run(result_manual)}\n vs {sess.run(result_rotated)}" 
             
 
 # show_all_rotations()

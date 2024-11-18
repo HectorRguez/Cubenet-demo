@@ -30,10 +30,8 @@ class Layers(object):
             sys.exit(-1)
         self.group_dim = self.group.group_dim
             
-
         # Constants
         self.cayley = self.group.cayleytable
-        self.kernel_exists = 0
         
 
     def get_kernel(self, name, shape, factor=2.0, trainable=True):
@@ -41,13 +39,6 @@ class Layers(object):
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             kernel = tf.get_variable(name, shape=shape, initializer=init, trainable=trainable)
         return kernel
-
-    # def get_kernel(self, name, shape):    
-    #     if(self.kernel_exists == 0): 
-    #         x = np.random.rand(shape[0], shape[1], shape[2], shape[3])
-    #         self.kernel = tf.constant(x, dtype=tf.float32)
-    #         self.kernel_exists = 1
-    #     return self.kernel
 
 
     def conv(self, x, kernel_size, n_out, strides=1, padding="SAME"):
@@ -92,7 +83,7 @@ class Layers(object):
         """Perform a discretized convolution on SO(3)
 
         Args:
-            x: [batch_size, height, width, n_in, group_dim/1]
+            x: [batch_size, N0, N1, N2, n_in, group_dim/1]
             kernel_size: int for the spatial size of the kernel
             n_out: int for number of output channels
             strides: int for spatial stride length
@@ -103,33 +94,23 @@ class Layers(object):
         batch_size = tf.shape(x)[0]
         with tf.variable_scope('Gconv'):
             xsh = x.get_shape().as_list()
-            init = tf.variance_scaling_initializer()
-            # W is the base filter. We rotate it 4 times for a p4 convolution over
-            # R^2. For a p4 convolution over p4, we rotate it, and then shift up by
-            # one dimension in the channels.
-            W = self.get_kernel("W", [kernel_size, kernel_size, kernel_size, xsh[4]*xsh[5]*n_out])
+            xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]]) # stash n_in and in_group_dim
+            W = self.get_kernel("W", [kernel_size, kernel_size, kernel_size, xsh[4]*xsh[5]*n_out]) # stash n_in*in_group*n_out
             WN = self.group.get_Grotations(W)
-            WN = tf.stack(WN, -1)
-            # Reshape and rotate the io filters 4 times. Each input-output pair is
-            # rotated and stacked into a much bigger kernel
-            xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]])
+            # copy and rotate the filter by all group elements.
+            # WN is a list of all rotated copies.
             if xsh[-1] == 1:
-                # A convolution on R^2 is just standard convolution with 3 extra 
-                # output channels for each rotation of the filters
-                WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4], -1])
+                WN = tf.stack(WN, -1) # stash all rotations (as a list) into the last dimension (as a tensor)
+                WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4], -1]) 
+                # separate n_in and n_out*out_group, as a preparation for conv3d
             elif xsh[-1] == self.group_dim:
-                # A convolution on p4 is different to convolution on R^2. For each
-                # dimension of the group output, we need to both rotate the filters
-                # and circularly shift them in the input-group dimension. In a
-                # sense, we have to spiral the filters
-                WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4], self.group_dim, n_out, self.group_dim])
-                # [kernel_size, kernel_size, kernel_size, n_in, 4, n_out, 4]
-                # Shift over axis 4
-                WN_shifted = self.group.G_permutation(WN)
-                WN = tf.stack(WN_shifted, -1)
-                # Shift over axis 6
-                # Stack the shifted tensors and reshape to 4D kernel
+                kernel_shape = [kernel_size, kernel_size, kernel_size, xsh[4], self.group_dim, n_out]
+                # kernel shape is explicitly needed, to divide the channel dimension of each copy into n_in, in_group, n_out
+                # so that we can permute the in_group dimension of rotated copies.
+                WN = self.group.get_Gpermutations(WN, kernel_shape)
+                WN = tf.stack(WN, -1) # stash all copies (as a list) into the last dimension (as a tensor)
                 WN = tf.reshape(WN, [kernel_size, kernel_size, kernel_size, xsh[4]*self.group_dim, n_out*self.group_dim])
+                # separate n_in*in_group and n_out*out_group, as a preparation for conv3d
 
             # Convolve
             # Gaussian dropout on the weights
