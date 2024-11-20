@@ -3,8 +3,7 @@ import argparse
 import os
 import sys
 import time
-sys.path.append('../')
-sys.path.append('../cubenet')
+sys.path.append('.')
 
 import numpy as np
 import tensorflow as tf
@@ -13,40 +12,41 @@ from layers import Layers
 
 
 class GVGG(Layers):
-    def __init__(self, images, is_training, args):
+    def __init__(self, cubes, is_training, args):
         super().__init__(args.group)
 
         # Constants
-        self.batch_size = tf.shape(images)[0]
+        self.batch_size = tf.shape(cubes)[0]
 
-        # Inputs
-        self.images = images
-        self.n_classes = args.n_classes
-        self.ks = args.kernel_size
-        self.ks1 = args.first_kernel_size
-        self.nc = args.n_channels
-        self.drop_sigma = args.drop_sigma
+        # Input configuration
+        self.cubes = cubes
+        self.nc = 1
+        self.drop_sigma = 0.01
 
         # model predictions
         print("...Constructing network")
-        self.pred_logits = self.get_pred(self.images, is_training)
+        self.pred_logits = self.get_pred(self.cubes, is_training)
 
 
     def get_pred(self, x, is_training): #, reuse=False):
         with tf.variable_scope('prediction') as scope: #, reuse=reuse) as scope:
             init = tf.contrib.layers.variance_scaling_initializer()
             use_bn = True
-            nc = int(self.nc/self.group_dim)
             ds = self.drop_sigma
 
             # Encoder
-            x = tf.expand_dims(x, -1)
-            x = self.Gconv_block(x, self.ks1, 2*nc,  is_training, use_bn=use_bn, strides=2, drop_sigma=ds, name="Gconv_1")
-            
-            # Decoder
+            x = self.Gconv_block(x, 3, 2,  is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="Gconv_1")  # Size 8
+            x = self.Gconv_block(x, 3, 4,  is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="Gconv_2")  # Size 4
+            x = self.Gconv_block(x, 3, 8,  is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="Gconv_3")  # Size 2
+            x = self.Gconv_block(x, 2, 16, is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="Gconv_4")  # Size 1
 
+            # Decoder
+            x = self.GconvTransposed_block(x, 2, 16, is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="GconvTransposed_1") # Size 2
+            x = self.GconvTransposed_block(x, 3, 8,  is_training, use_bn=use_bn, strides=2, drop_sigma=ds, padding='VALID', name="GconvTransposed_2") # Size 4
+            x = self.GconvTransposed_block(x, 3, 4,  is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="GconvTransposed_3") # Size 8
+            x = self.GconvTransposed_block(x, 3, 1,  is_training, use_bn=use_bn, strides=1, drop_sigma=ds, padding='VALID', name="GconvTransposed_4") # Size 16
             
-            
+        return x
 
 
 class GResnet(Layers):
