@@ -129,7 +129,7 @@ class Layers(object):
 
             # Convolve
             # Gaussian dropout on the weights
-            #WN *= (1 + drop_sigma*tf.to_float(is_training)*tf.random_normal(WN.get_shape()))
+            WN *= (1 + drop_sigma*tf.to_float(is_training)*tf.random_normal(WN.get_shape()))
 
             if not (isinstance(strides, tuple) or isinstance(strides, list)):
                 strides = (1,strides,strides,strides,1)
@@ -165,7 +165,7 @@ class Layers(object):
         WN = tf.transpose(WN, [0, 1, 2, 4, 3])
 
         # Gaussian dropout on the weights
-        #WN *= (1 + drop_sigma*tf.to_float(is_training)*tf.random_normal(WN.get_shape()))
+        WN *= (1 + drop_sigma*tf.to_float(is_training)*tf.random_normal(WN.get_shape()))
 
         # Prepare input for the convolution
         xN = tf.reshape(x, [batch_size, xsh[1], xsh[2], xsh[3], xsh[4]*xsh[5]])
@@ -191,7 +191,22 @@ class Layers(object):
         y = tf.reshape(yN, [batch_size, ysh[1], ysh[2], ysh[3], n_out, self.group_dim])
         return y
     
-    
+
+    def GconvTransposed_block(self, x, kernel_size, n_out, is_training, use_bn=True, strides=1,
+            padding="SAME", fnc=tf.nn.relu, name="GconvTransposed_block", drop_sigma=0.1):
+        """Convolution with batch normalization/bias and nonlinearity"""
+        with tf.variable_scope(name):
+            y = self.GconvTransposed(x, kernel_size, n_out, is_training, strides=strides, padding=padding, drop_sigma=drop_sigma)
+            beta_init = tf.constant_initializer(0.01)
+            y = tf.transpose(y, perm=[0,1,2,3,5,4])
+            ysh = y.get_shape().as_list()
+            if use_bn:
+                y = tf.layers.batch_normalization(y, training=is_training, beta_initializer=beta_init)
+            else:
+                bias = tf.get_variable("bias", [n_out], initializer=beta_init)
+                y = tf.nn.bias_add(y, bias)
+            return tf.transpose(fnc(y), perm=[0,1,2,3,5,4])
+
 
 
     def Gres_block(self, x, kernel_size, n_out, is_training, use_bn=True,
