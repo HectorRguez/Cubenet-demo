@@ -1,6 +1,4 @@
-from cycler import V
 import numpy as np
-# import tensorflow as tf
 import torch
 
 from layers import GConv3D
@@ -8,7 +6,6 @@ from groups import V_group, S4_group, T4_group, D3_group, Z4_group
 
 np.random.seed(42)
 torch.manual_seed(42)
-# tf.set_random_seed(42)
 
 def is_close(tensor_a, tensor_b, epsilon=1e-4):
     return torch.allclose(tensor_a, tensor_b, rtol=0, atol=epsilon)

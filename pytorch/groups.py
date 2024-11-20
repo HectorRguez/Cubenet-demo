@@ -1,5 +1,4 @@
 import numpy as np
-# import tensorflow as tf
 import torch
 from abc import ABC, abstractmethod
 
@@ -139,13 +138,6 @@ class GroupBase(ABC):
 		# we need input[perm[i]] to be input[i],
 		# so input = input[inv_perm]
 		inv_perm = self.cayleytable[:, self.inverse_map[element]]
-		# idx = [slice(None)] * len(input.shape)  # Keeps other dimensions unchanged
-		# idx[dim] = inv_perm
-		# return input[idx]
-		# if dim == 2:
-			
-		# input = input[:, :, inv_perm, :, :, :]
-		# print(inv_perm)
 		input = torch.index_select(input, dim=dim, index=inv_perm)
 		return input
 	
@@ -186,32 +178,6 @@ class GroupBase(ABC):
 			self.permute_tensor(self.rotate_tensor(x, element=g, start_dim=3), element=g, dim=1) 
 		  	for g in range(self.group_dim)
 		]
-	
-	# def get_Gpermutations(self, W, kernel_shape):
-	# 	"""Permute the outputs of the group convolution
-	# 	Args: 
-	# 		W: [N0,N1,N2,in_channel,group_dim,out_channel*group_dim]
-	# 		W[:,:,:,:,:,:,i] is the i-th rotated copy of filter.
-
-	# 	Returns:
-	# 		list of the 4 rotated and permuted (in the group_dim) copies of filter
-	# 	"""
-	# 	return [
-	# 		torch.reshape(W[gi], kernel_shape)[:, :,:,:, :, self.cayleytable[:, self.inverse_map[gi]], :]
-	# 		for gi in range(self.group_dim)
-	# 	]
-	
-
-	# def get_permutation_matrix(self, gi):
-	# 	"""
-	# 		convert the i-th column [gi*g0, gi*g1, gi*g2, ..., gi*g23] in cayley table into a permutation matrix P.
-	# 		The permutation on W (filter) is to move the gj-th column to gi*gj-th column.
-	# 		So, consider the gi*gj-th column of P, only the gj-th element is 1 (to select the gj-th column of W), and the other elements are 0.
-	# 	"""
-	# 	mat = np.zeros((self.group_dim, self.group_dim))
-	# 	for j in range(self.group_dim):
-	# 		mat[j, self.cayleytable[j, gi]] = 1
-	# 	return mat
 	
 
 class S4_group(GroupBase):
