@@ -98,6 +98,7 @@ def test_equivariance():
     kernel_size =          4
     stride =               2            
     transposed =           False
+    transposed2 =          True
 
 
     output_channel_size =  2        
@@ -112,7 +113,8 @@ def test_equivariance():
     input_group_size =     1
 
     output_cube_size =     (input_cube_size - kernel_size) // stride + 1 if not transposed else (input_cube_size - 1) * stride + kernel_size
-    output_cube_size2 =     (output_cube_size - kernel_size) // stride + 1 if not transposed else (output_cube_size - 1) * stride + kernel_size
+    output_cube_size2 =     (output_cube_size - kernel_size) // stride + 1 if not transposed2 else (output_cube_size - 1) * stride + kernel_size
+    assert output_cube_size2 == input_cube_size
 
     ############################################################################################################################
     #                                                   PERFORM CONVOLUTION TEST 
@@ -120,7 +122,7 @@ def test_equivariance():
     x = torch.randn(batch_size, input_group_size, input_channel_size, input_cube_size, input_cube_size, input_cube_size)
     layer = torch.nn.Sequential(
         GConv3D(group, input_group_size, input_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0),
-        GConv3D(group, group.group_dim, output_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0)
+        GConv3D(group, group.group_dim, output_channel_size, output_channel_size, kernel_size, transposed=transposed2, stride=stride, padding=0)
     )
     # layer = GConv3D(group, input_group_size, input_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0)
     group_size = group.group_dim
