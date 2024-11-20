@@ -93,9 +93,9 @@ def test_equivariance():
     #                                                       TEST PARAMETERS
     ############################################################################################################################
     batch_size =           2
-    input_cube_size =      5
+    input_cube_size =      14
     input_channel_size =   2 
-    kernel_size =          3
+    kernel_size =          4
     stride =               2            
     transposed =           False
 
@@ -109,19 +109,25 @@ def test_equivariance():
     # group = T4_group()
     group = S4_group()
     input_group_size =     group.group_dim
+    input_group_size =     1
 
     output_cube_size =     (input_cube_size - kernel_size) // stride + 1 if not transposed else (input_cube_size - 1) * stride + kernel_size
+    output_cube_size2 =     (output_cube_size - kernel_size) // stride + 1 if not transposed else (output_cube_size - 1) * stride + kernel_size
 
     ############################################################################################################################
     #                                                   PERFORM CONVOLUTION TEST 
     ############################################################################################################################
     x = torch.randn(batch_size, input_group_size, input_channel_size, input_cube_size, input_cube_size, input_cube_size)
-    layer = GConv3D(group, input_group_size, input_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0)
+    layer = torch.nn.Sequential(
+        GConv3D(group, input_group_size, input_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0),
+        GConv3D(group, group.group_dim, output_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0)
+    )
+    # layer = GConv3D(group, input_group_size, input_channel_size, output_channel_size, kernel_size, transposed=transposed, stride=stride, padding=0)
     group_size = group.group_dim
 
     # Shape test
     result = layer(x)
-    expected_shape = (batch_size, group_size, output_channel_size, output_cube_size, output_cube_size, output_cube_size)
+    expected_shape = (batch_size, group_size, output_channel_size, output_cube_size2, output_cube_size2, output_cube_size2)
     assert result.shape == expected_shape, f"Gconv output shape {result.shape} does not match expected {expected_shape}"
     print("test_dim_Gconv passed")
         
@@ -141,9 +147,9 @@ def test_equivariance():
 
         # result_manual = layer.group.permute_tensor(result_rotated, layer.group.inverse_map[test_element])
         # result_manual = layer.group.rotate_tensor_with_batch(result_manual, layer.group.inverse_map[test_element])
-        result_manual = layer.group.rotate_tensor(result, test_element, start_dim=3)
+        result_manual = group.rotate_tensor(result, test_element, start_dim=3)
         # print(f"result_manual {result_manual}")
-        result_manual = layer.group.permute_tensor(result_manual, test_element, dim=1)
+        result_manual = group.permute_tensor(result_manual, test_element, dim=1)
         # print(sess.run(result_manual))
         # print(f"Equivariance Test: rotated and permuted output does not match x_rotated result {result_rotated.shape}. \nTest element {test_element}\n {result_manual}\n vs {result_rotated}")
         assert is_close(result_manual, result_rotated), f"Equivariance Test: rotated and permuted output does not match x_rotated result {result_rotated.shape}. \nTest element {test_element}\n {result_manual}\n vs {result_rotated}" 
