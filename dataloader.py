@@ -1,132 +1,88 @@
-"""Data-loader using new TF Dataset class for Plankton"""
-import os
-import random
-import sys
-import time
-
-import numpy as np
 import tensorflow as tf
+import numpy as np
 
-
-class DataLoader(object):
-    """Wrapper class around TF dataset pipeline"""
-    
-    def __init__(self, address_file, mode, batch_size, height, jitter, 
-                 shuffle=True, buffer_size=1000, num_threads=8):
-        """Create a new dataloader for the Kaggle plankton dataset
+class GreenFunctionDataset:
+    def __init__(self, file_paths, batch_size, shuffle=True, N=16, dtype=np.float32):
+        """
+        Initialize the dataset loader.
 
         Args:
-            address_file: path to file of addresses and labels
-            mode: 'train' or 'test'
-            batch_size: int for number of images per batch
-            n_classes: int for number of classes in dataset
-            height: output image height
-            width: output image width
-            shuffle: bool for whether to shuffle dataset order
-            buffer_size: int for number of images to store in buffer
-            num_threads: int for number of CPU threads for preprocessing
-        Raises:
-            ValueError: If an invalid mode is passed
+            file_paths: List of file paths for the dataset.
+            batch_size: Batch size for training/testing.
+            shuffle: Whether to shuffle the dataset.
+            N: Number of Green's function blocks (default: 16).
+            dtype: Data type for the binary file (default: np.float64).
         """
-        self.address_file = address_file
-        self.height = height
-        self.jitter = jitter
+        self.file_paths = file_paths
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.N = N
+        self.dtype = dtype
 
-        # Read in data from address file
-        self._read_address_file(shuffle)
-        self.n_classes = len(np.unique(self.labels))
-        self.data_size = len(self.labels)
-        print("{} classes detected".format(self.n_classes))
-        print("{} training examples detected".format(self.data_size))
+    def _parse_raw(self, address_file):
+        """
+        Function to read floats from a binary file.
 
-        # Tensorize data
-        self.img_paths = tf.convert_to_tensor(self.img_paths, dtype=tf.string)
-        self.labels = tf.convert_to_tensor(self.labels, dtype=tf.string)
-        self.labels = tf.string_to_number(self.labels, out_type=tf.int32)-1
+        Args:
+            address_file: File path to the binary file.
 
-        # Create TF dataset object
-        data = tf.data.Dataset.from_tensor_slices((self.img_paths, self.labels))
+        Returns:
+            data: Dielectric constants as an array.
+            gf: Green's function as an array.
+        """
+        data = np.fromfile(address_file, dtype=self.dtype)
+        n = int(data[0])
+        block_width = int(data[1])
+        print(n)
+        print(block_width)
+        blockn = n // block_width
         
-        if mode == 'train':
-            data = data.map(self._preprocess_train, num_parallel_calls=8).prefetch(100*batch_size)
-        elif mode == 'test':
-            data = data.map(self._preprocess_test, num_parallel_calls=8).prefetch(10*batch_size)
-        else:
-            raise ValueError("Invalid mode '{:s}'.".format(mode))
-
-        # Shuffle within buffer for training
-        if shuffle:
-            data = data.shuffle(buffer_size=buffer_size)
-
-        # Minibatch
-        self.data = data.batch(batch_size)
-
-    
-    def _read_address_file(self, shuffle):
-        """Read contents of address file and store in lists"""
-        self.img_paths = []
-        self.labels = []
-        with open(self.address_file, 'r') as fp:
-            # Read in lines
-            lines = fp.readlines()
-
-            # Store lines in dict according to object. Values are rotations
-            objects = {}
-            for line in lines:
-                if 'test' in line:
-                    stem = line.split('test/')[1]
-                else:
-                    stem = line.split('train/')[1]
-                stem = stem.split('.png')[0][:-3]
-                if stem not in objects:
-                    objects[stem] = []
-                objects[stem].append(line)
-
-            # Concat in list
-            lines = []
-            for key in objects.keys():
-                lines.extend(objects[key])
-
-            # Shuffle
-            if shuffle:
-                random.shuffle(lines) 
-
-            # Format lines
-            for line in lines:
-                items = line.replace('\n','').split(',')
-                self.img_paths.append(items[0])
-                self.labels.append(items[1])
-
-
-    def _preprocess_train(self, filename, label):
-        """"Input preprocessing for training mode"""
-        img_string = tf.read_file(filename)
-        image = tf.image.decode_image(img_string, channels=1)
-        image = 6.*tf.to_float(tf.stack([image]))-1.
-        image.set_shape([self.height, self.height, self.height])
+        length = blockn * blockn * blockn + n * n * 6
+        data = data[2:]
         
-        # Data augmentation
-        # x-flip
-        image = tf.image.random_flip_up_down(image)
-        # y-flip
-        image = tf.image.random_flip_left_right(image)
-        # x-y-z jitter
-        J = self.jitter
-        paddings = tf.constant([[J,J],[J,J],[J,J],[0,0]])
-        image = tf.reshape(image, [self.height, self.height, self.height,1])
-        image = tf.pad(image, paddings)
-        image = tf.random_crop(image, tf.constant([self.height, self.height, self.height, 1]))
-        image = tf.reshape(image, [self.height, self.height, self.height, 1])
-        
-        return image, label
+        # data = data[2:length*1000+2] # TODO Fix this problem
 
+        data = data.reshape(-1, length)
+        data, gf = np.split(data, [blockn * blockn * blockn], axis=1)
+        data = data.reshape(-1, blockn, blockn, blockn, 1)
+        return data, gf
 
-    def _preprocess_test(self, filename, label):
-        """"Input preprocessing for training mode"""
-        img_string = tf.read_file(filename)
-        image = tf.image.decode_image(img_string, channels=1)
-        image = 6.*tf.to_float(tf.stack([image]))-1.
-        image.set_shape([self.height, self.height, self.height ,1])
-        
-        return image, label
+    def _load_sample(self, file_path):
+        """
+        Wrap _parse_raw to load data and return tensors.
 
+        Args:
+            file_path: File path to the binary file.
+
+        Returns:
+            Tuple of dielectric constants and Green's function as tensors.
+        """
+        data, gf = self._parse_raw(file_path.numpy().decode("utf-8"))
+        return tf.convert_to_tensor(data, dtype=tf.float32), tf.convert_to_tensor(gf, dtype=tf.float32)
+
+    def _tf_parse(self, file_path):
+        """
+        TensorFlow wrapper for _load_sample.
+
+        Args:
+            file_path: File path tensor.
+
+        Returns:
+            Tuple of dielectric constants and Green's function tensors.
+        """
+        data, gf = tf.py_function(func=self._load_sample, inp=[file_path], Tout=[tf.float32, tf.float32])
+        return data, gf
+
+    def get_dataset(self):
+        """
+        Create the TensorFlow dataset pipeline.
+
+        Returns:
+            A tf.data.Dataset object.
+        """
+        dataset = tf.data.Dataset.from_tensor_slices(self.file_paths)
+        if self.shuffle:
+            dataset = dataset.shuffle(buffer_size=len(self.file_paths))
+        dataset = dataset.map(self._tf_parse, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
+        return dataset
