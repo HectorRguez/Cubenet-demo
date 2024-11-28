@@ -1,7 +1,8 @@
-import tensorflow as tf
+import torch
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
-class GreenFunctionDataset:
+class GreenFunctionDataset(Dataset):
     def __init__(self, file_paths, batch_size, shuffle=True, N=16, dtype=np.float32):
         """
         Initialize the dataset loader.
@@ -11,7 +12,7 @@ class GreenFunctionDataset:
             batch_size: Batch size for training/testing.
             shuffle: Whether to shuffle the dataset.
             N: Number of Green's function blocks (default: 16).
-            dtype: Data type for the binary file (default: np.float64).
+            dtype: Data type for the binary file (default: np.float32).
         """
         self.file_paths = file_paths
         self.batch_size = batch_size
@@ -47,42 +48,32 @@ class GreenFunctionDataset:
         data = data.reshape(-1, blockn, blockn, blockn, 1)
         return data, gf
 
-    def _load_sample(self, file_path):
+    def __len__(self):
         """
-        Wrap _parse_raw to load data and return tensors.
-
-        Args:
-            file_path: File path to the binary file.
-
-        Returns:
-            Tuple of dielectric constants and Green's function as tensors.
+        Return the number of samples in the dataset.
         """
-        data, gf = self._parse_raw(file_path.numpy().decode("utf-8"))
-        return tf.convert_to_tensor(data, dtype=tf.float32), tf.convert_to_tensor(gf, dtype=tf.float32)
+        return len(self.file_paths)
 
-    def _tf_parse(self, file_path):
+    def __getitem__(self, idx):
         """
-        TensorFlow wrapper for _load_sample.
-
-        Args:
-            file_path: File path tensor.
-
-        Returns:
-            Tuple of dielectric constants and Green's function tensors.
+        Get a single sample from the dataset by index.
         """
-        data, gf = tf.py_function(func=self._load_sample, inp=[file_path], Tout=[tf.float32, tf.float32])
+        file_path = self.file_paths[idx]
+        data, gf = self._parse_raw(file_path)
+        
+        # Convert to torch tensors
+        data = torch.tensor(data, dtype=torch.float32)
+        gf = torch.tensor(gf, dtype=torch.float32)
+        
         return data, gf
 
-    def get_dataset(self):
+    def get_dataloader(self):
         """
-        Create the TensorFlow dataset pipeline.
+        Create a PyTorch DataLoader.
 
         Returns:
-            A tf.data.Dataset object.
+            A DataLoader object.
         """
-        dataset = tf.data.Dataset.from_tensor_slices(self.file_paths)
-        if self.shuffle:
-            dataset = dataset.shuffle(buffer_size=len(self.file_paths))
-        dataset = dataset.map(self._tf_parse, num_parallel_calls=tf.data.AUTOTUNE)
-        dataset = dataset.batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
-        return dataset
+        dataset = self  # self is already a Dataset object
+        return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
+
